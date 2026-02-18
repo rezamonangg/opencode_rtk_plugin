@@ -2,7 +2,34 @@
   "enabled": true,
   "commands": [
     "git status",
+    "git diff",
+    "git log",
     "ls",
-    "cat"
-  ]
+    "cat",
+    "rg",
+    "grep",
+    "find",
+    "cargo",
+    "docker",
+    "kubectl",
+    "pytest",
+    "go test",
+    "go build",
+    "go vet",
+    "vitest",
+    "eslint",
+    "tsc",
+    "ruff",
+    "pip",
+    "golangci-lint",
+    "prettier",
+    "curl",
+    "gh",
+    "npm test"
+  ],
+  "rewriteMap": {
+    "cat": "rtk read",
+    "rg": "rtk grep",
+    "eslint": "rtk lint"
+  }
 }

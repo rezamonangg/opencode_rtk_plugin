@@ -1,22 +1,6 @@
 import type { Plugin } from "@opencode-ai/plugin"
-import { readFileSync, existsSync } from "fs"
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs"
 import { join } from "path"
-
-// ============================================================
-// RTK Rewrite Map
-// ============================================================
-// Some commands have different names in RTK than the original.
-// For example, `cat file.txt` becomes `rtk read file.txt`, not
-// `rtk cat file.txt`. This map handles those cases.
-//
-// Commands NOT in this map are prefixed with `rtk ` as-is.
-// e.g., `git status` -> `rtk git status`
-
-const REWRITE_MAP: Record<string, string> = {
-  cat: "rtk read",
-  rg: "rtk grep",
-  eslint: "rtk lint",
-}
 
 // ============================================================
 // Configuration
@@ -25,18 +9,57 @@ const REWRITE_MAP: Record<string, string> = {
 interface RtkConfig {
   enabled: boolean
   commands: string[]
+  rewriteMap: Record<string, string>
 }
 
 const DEFAULT_CONFIG: RtkConfig = {
   enabled: true,
-  commands: ["git status", "ls", "cat"],
+  commands: [
+    "git status",
+    "git diff",
+    "git log",
+    "ls",
+    "cat",
+    "rg",
+    "grep",
+    "find",
+    "cargo",
+    "docker",
+    "kubectl",
+    "pytest",
+    "go test",
+    "go build",
+    "go vet",
+    "vitest",
+    "eslint",
+    "tsc",
+    "ruff",
+    "pip",
+    "golangci-lint",
+    "prettier",
+    "curl",
+    "gh",
+    "npm test",
+  ],
+  rewriteMap: {
+    cat: "rtk read",
+    rg: "rtk grep",
+    eslint: "rtk lint",
+  },
 }
 
-function loadConfig(configDir: string): RtkConfig {
+function loadOrCreateConfig(configDir: string): RtkConfig {
   const configPath = join(configDir, "rtk-wrapper-config.json")
 
   if (!existsSync(configPath)) {
-    return { ...DEFAULT_CONFIG }
+    // Auto-create config with defaults on first run.
+    try {
+      mkdirSync(configDir, { recursive: true })
+      writeFileSync(configPath, JSON.stringify(DEFAULT_CONFIG, null, 2), "utf-8")
+    } catch {
+      // If we can't write (e.g. permissions), fall back to in-memory defaults.
+    }
+    return { ...DEFAULT_CONFIG, rewriteMap: { ...DEFAULT_CONFIG.rewriteMap } }
   }
 
   try {
@@ -47,10 +70,14 @@ function loadConfig(configDir: string): RtkConfig {
       commands: Array.isArray(parsed.commands)
         ? parsed.commands
         : DEFAULT_CONFIG.commands,
+      rewriteMap:
+        parsed.rewriteMap != null && typeof parsed.rewriteMap === "object"
+          ? parsed.rewriteMap
+          : { ...DEFAULT_CONFIG.rewriteMap },
     }
   } catch {
-    // If config file is malformed, fall back to defaults silently.
-    return { ...DEFAULT_CONFIG }
+    // Malformed config — fall back to defaults silently.
+    return { ...DEFAULT_CONFIG, rewriteMap: { ...DEFAULT_CONFIG.rewriteMap } }
   }
 }
 
@@ -59,11 +86,10 @@ function loadConfig(configDir: string): RtkConfig {
 // ============================================================
 
 /**
- * Checks if a command string matches any of the configured patterns.
+ * Checks if a command matches any configured pattern using prefix + word-boundary logic.
  *
- * Uses prefix matching with word boundary logic:
- *   - "git status" matches "git status" and "git status -s"
- *   - "ls" matches "ls" and "ls -la" but NOT "lsof"
+ * "ls"  matches "ls" and "ls -la" but NOT "lsof".
+ * "git" matches "git status" and "git diff" but NOT "github-cli".
  */
 function shouldWrap(command: string, patterns: string[]): boolean {
   const trimmed = command.trim()
@@ -73,16 +99,8 @@ function shouldWrap(command: string, patterns: string[]): boolean {
 }
 
 /**
- * Checks if a command is "simple" (safe to wrap).
- *
- * We skip complex shell constructs because RTK may not handle them
- * correctly. Specifically, we skip:
- *   - Pipes:     `git status | grep modified`
- *   - AND chain: `git add . && git commit -m "msg"`
- *   - OR chain:  `cmd1 || cmd2`
- *   - Semicolons: `cmd1; cmd2`
- *   - Heredocs:  `cat <<EOF`
- *   - Subshells: `$(command)` or backticks
+ * Returns false for commands with shell constructs RTK cannot handle:
+ * pipes (|), AND/OR chains (&&, ||), semicolons (;), heredocs (<<).
  */
 function isSimpleCommand(command: string): boolean {
   return !/[|;]|&&|\|\||<</.test(command)
@@ -93,17 +111,17 @@ function isSimpleCommand(command: string): boolean {
 // ============================================================
 
 /**
- * Rewrites a command to use RTK.
+ * Rewrites a command to its RTK equivalent.
  *
- * Most commands: prepend "rtk " (e.g., "git status" -> "rtk git status")
- * Special cases: use REWRITE_MAP (e.g., "cat file.txt" -> "rtk read file.txt")
+ * Checks rewriteMap first for commands with different RTK names
+ * (e.g. "cat" -> "rtk read"), then falls back to prepending "rtk ".
  */
-function rewriteCommand(command: string): string {
+function rewriteCommand(command: string, rewriteMap: Record<string, string>): string {
   const trimmed = command.trim()
   const firstWord = trimmed.split(/\s+/)[0]
 
-  if (firstWord in REWRITE_MAP) {
-    return trimmed.replace(firstWord, REWRITE_MAP[firstWord])
+  if (firstWord in rewriteMap) {
+    return trimmed.replace(firstWord, rewriteMap[firstWord])
   }
 
   return `rtk ${trimmed}`
@@ -114,8 +132,6 @@ function rewriteCommand(command: string): string {
 // ============================================================
 
 export const RTKPlugin: Plugin = async ({ client }) => {
-  // Resolve config directory from the environment variable OpenCode sets,
-  // falling back to the standard XDG config path.
   const configDir =
     process.env.OPENCODE_CONFIG_DIR ??
     join(
@@ -124,7 +140,7 @@ export const RTKPlugin: Plugin = async ({ client }) => {
       "opencode"
     )
 
-  const config = loadConfig(configDir)
+  const config = loadOrCreateConfig(configDir)
 
   if (!config.enabled) {
     await client.app.log({
@@ -147,7 +163,6 @@ export const RTKPlugin: Plugin = async ({ client }) => {
 
   return {
     "tool.execute.before": async (input, output) => {
-      // Only intercept bash tool calls.
       if (input.tool !== "bash") return
 
       const command = output.args.command as string
@@ -155,17 +170,11 @@ export const RTKPlugin: Plugin = async ({ client }) => {
 
       const trimmed = command.trim()
 
-      // Skip commands already using rtk.
       if (trimmed.startsWith("rtk ")) return
-
-      // Skip complex commands (pipes, chains, heredocs).
       if (!isSimpleCommand(trimmed)) return
-
-      // Skip commands that don't match any configured pattern.
       if (!shouldWrap(trimmed, config.commands)) return
 
-      // Apply the rewrite.
-      const rewritten = rewriteCommand(trimmed)
+      const rewritten = rewriteCommand(trimmed, config.rewriteMap)
       output.args.command = rewritten
 
       await client.app.log({
