@@ -1,6 +1,52 @@
 import type { Plugin } from "@opencode-ai/plugin"
+import { tool } from "@opencode-ai/plugin"
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs"
 import { join } from "path"
+
+// ============================================================
+// Session Stats (module-scope — resets on plugin reload)
+// ============================================================
+
+interface SessionStats {
+  rewriteCount: number
+  commands: Record<string, number>
+  startedAt: Date
+}
+
+const sessionStats: SessionStats = {
+  rewriteCount: 0,
+  commands: {},
+  startedAt: new Date(),
+}
+
+// ============================================================
+// Stats Formatting
+// ============================================================
+
+function formatSessionStats(stats: SessionStats): string {
+  const elapsed = Date.now() - stats.startedAt.getTime()
+  const minutes = Math.floor(elapsed / 60_000)
+  const hours = Math.floor(minutes / 60)
+  const duration = hours > 0 ? `${hours}h ${minutes % 60}m` : `${minutes}m`
+
+  if (stats.rewriteCount === 0) {
+    return `RTK Session Stats (${duration})\nNo commands rewritten yet.`
+  }
+
+  const sorted = Object.entries(stats.commands).sort(([, a], [, b]) => b - a)
+  const maxCmdLen = Math.max(...sorted.map(([cmd]) => cmd.length))
+  const lines = sorted.map(
+    ([cmd, count]) =>
+      `  ${cmd.padEnd(maxCmdLen)}  — ${count} rewrite${count !== 1 ? "s" : ""}`
+  )
+
+  return [
+    `RTK Session Stats (${duration})`,
+    `Total rewrites: ${stats.rewriteCount}`,
+    "",
+    ...lines,
+  ].join("\n")
+}
 
 // ============================================================
 // Configuration
@@ -153,6 +199,27 @@ export const RTKPlugin: Plugin = async ({ client }) => {
     return {}
   }
 
+  // Auto-create the /rtk-gain slash command file if absent.
+  const commandsDir = join(configDir, "commands")
+  const commandPath = join(commandsDir, "rtk-gain.md")
+  if (!existsSync(commandPath)) {
+    try {
+      mkdirSync(commandsDir, { recursive: true })
+      writeFileSync(
+        commandPath,
+        [
+          "---",
+          "description: Show RTK token savings for this session",
+          "---",
+          "Call the rtk_gain tool to display RTK rewrite statistics for the current session.",
+        ].join("\n"),
+        "utf-8"
+      )
+    } catch {
+      // Non-fatal — user can create the file manually.
+    }
+  }
+
   await client.app.log({
     body: {
       service: "opencode-rtk",
@@ -162,6 +229,18 @@ export const RTKPlugin: Plugin = async ({ client }) => {
   })
 
   return {
+    tool: {
+      rtk_gain: tool({
+        description:
+          "Show RTK rewrite statistics for the current OpenCode session. " +
+          "Returns a count of how many bash commands were rewritten to use RTK, " +
+          "broken down by command.",
+        args: {},
+        async execute() {
+          return formatSessionStats(sessionStats)
+        },
+      }),
+    },
     "tool.execute.before": async (input, output) => {
       if (input.tool !== "bash") return
 
@@ -176,6 +255,12 @@ export const RTKPlugin: Plugin = async ({ client }) => {
 
       const rewritten = rewriteCommand(trimmed, config.rewriteMap)
       output.args.command = rewritten
+
+      // Track the rewrite for /rtk-gain stats.
+      sessionStats.rewriteCount++
+      const words = trimmed.split(/\s+/)
+      const cmdKey = words.length >= 2 ? `${words[0]} ${words[1]}` : words[0]
+      sessionStats.commands[cmdKey] = (sessionStats.commands[cmdKey] ?? 0) + 1
 
       await client.app.log({
         body: {
