@@ -1,0 +1,8 @@
+{
+  "enabled": true,
+  "commands": [
+    "git status",
+    "ls",
+    "cat"
+  ]
+}
