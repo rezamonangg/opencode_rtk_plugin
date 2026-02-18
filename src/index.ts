@@ -211,7 +211,7 @@ export const RTKPlugin: Plugin = async ({ client }) => {
           "---",
           "description: Show RTK token savings for this session",
           "---",
-          "Call the rtk_gain tool to display RTK rewrite statistics for the current session.",
+          "Use the rtk_gain tool (not slash command) to display RTK rewrite statistics for the current session. Return the formatted stats to the user.",
         ].join("\n"),
         "utf-8"
       )
