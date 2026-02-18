@@ -51,13 +51,21 @@ function getOpenCodeConfigPath(): string {
 function readOpenCodeConfig(): any {
   const configPath = getOpenCodeConfigPath()
   if (!existsSync(configPath)) {
-    return { plugin: [] }
+    return {}
   }
   try {
     const content = readFileSync(configPath, "utf-8")
-    return JSON.parse(content)
-  } catch {
-    return { plugin: [] }
+    const parsed = JSON.parse(content)
+    // Ensure plugin array exists but preserve everything else
+    if (!parsed.plugin) {
+      parsed.plugin = []
+    }
+    return parsed
+  } catch (error) {
+    // If we can't parse, throw - don't silently destroy config
+    console.error("Error: Could not parse opencode.json")
+    console.error(error)
+    process.exit(1)
   }
 }
 
@@ -70,8 +78,24 @@ function isPluginConfigured(config: any): boolean {
   )
 }
 
+function backupConfig(configPath: string): void {
+  try {
+    if (existsSync(configPath)) {
+      const backupPath = `${configPath}.backup.${new Date().toISOString().replace(/[:.]/g, "-")}`
+      const content = readFileSync(configPath, "utf-8")
+      writeFileSync(backupPath, content)
+    }
+  } catch {
+    // Silent fail - backup is best effort
+  }
+}
+
 function addPluginToConfig(): void {
   const configPath = getOpenCodeConfigPath()
+  
+  // Create backup before modifying
+  backupConfig(configPath)
+  
   const config = readOpenCodeConfig()
 
   if (!config.plugin) {
@@ -89,6 +113,10 @@ function addPluginToConfig(): void {
 
 function removePluginFromConfig(): void {
   const configPath = getOpenCodeConfigPath()
+  
+  // Create backup before modifying
+  backupConfig(configPath)
+  
   const config = readOpenCodeConfig()
 
   if (!config.plugin) {
