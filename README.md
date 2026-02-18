@@ -106,6 +106,8 @@ Add `opencode-rtk` to your OpenCode config. OpenCode installs it automatically v
 
 That's it.
 
+> **Note:** The `opencode-rtk` package needs to be built and published to npm first before this method works. See [Building and Publishing](#building-and-publishing) below.
+
 ### Option 2 — bunx / npx
 
 ```bash
@@ -228,6 +230,28 @@ Plugin logs are written at `debug` level under `opencode-rtk`. Enable OpenCode's
 [opencode-rtk] RTK rewrite: "git status" -> "rtk git status"
 [opencode-rtk] RTK rewrite: "cat src/main.rs" -> "rtk read src/main.rs"
 ```
+
+---
+
+## Building and Publishing
+
+To use the npm installation method (Option 1), you need to build and publish the package first:
+
+### Build
+
+```bash
+bun install
+bun run build
+```
+
+### Publish to npm
+
+```bash
+npm login
+npm publish
+```
+
+After publishing, users can install via `npm install opencode-rtk` or by adding it to their OpenCode config.
 
 ---
 
