@@ -1,6 +1,6 @@
 {
   "name": "@rezamonangg/opencode-rtk",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "OpenCode plugin that transparently wraps eligible bash commands with RTK to reduce LLM token consumption by 60-90%",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
