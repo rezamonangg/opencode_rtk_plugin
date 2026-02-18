@@ -2,6 +2,7 @@ import type { Plugin } from "@opencode-ai/plugin"
 import { tool } from "@opencode-ai/plugin"
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs"
 import { join } from "path"
+import { execSync } from "child_process"
 
 // ============================================================
 // Session Stats (module-scope — resets on plugin reload)
@@ -29,23 +30,30 @@ function formatSessionStats(stats: SessionStats): string {
   const hours = Math.floor(minutes / 60)
   const duration = hours > 0 ? `${hours}h ${minutes % 60}m` : `${minutes}m`
 
-  if (stats.rewriteCount === 0) {
-    return `RTK Session Stats (${duration})\nNo commands rewritten yet.`
+  // Try to get actual token savings from RTK
+  try {
+    const rtkGain = execSync("rtk gain", { encoding: "utf-8", timeout: 5000 })
+    return `RTK Token Savings (${duration})\n\n${rtkGain}`
+  } catch {
+    // Fallback to basic stats if rtk gain fails
+    if (stats.rewriteCount === 0) {
+      return `RTK Session Stats (${duration})\nNo commands rewritten yet.`
+    }
+
+    const sorted = Object.entries(stats.commands).sort(([, a], [, b]) => b - a)
+    const maxCmdLen = Math.max(...sorted.map(([cmd]) => cmd.length))
+    const lines = sorted.map(
+      ([cmd, count]) =>
+        `  ${cmd.padEnd(maxCmdLen)}  — ${count} rewrite${count !== 1 ? "s" : ""}`
+    )
+
+    return [
+      `RTK Session Stats (${duration})`,
+      `Total rewrites: ${stats.rewriteCount}`,
+      "",
+      ...lines,
+    ].join("\n")
   }
-
-  const sorted = Object.entries(stats.commands).sort(([, a], [, b]) => b - a)
-  const maxCmdLen = Math.max(...sorted.map(([cmd]) => cmd.length))
-  const lines = sorted.map(
-    ([cmd, count]) =>
-      `  ${cmd.padEnd(maxCmdLen)}  — ${count} rewrite${count !== 1 ? "s" : ""}`
-  )
-
-  return [
-    `RTK Session Stats (${duration})`,
-    `Total rewrites: ${stats.rewriteCount}`,
-    "",
-    ...lines,
-  ].join("\n")
 }
 
 // ============================================================
