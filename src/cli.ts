@@ -131,6 +131,7 @@ function showHelp() {
   log("Commands:", "bold")
   log("  install     Install the plugin to OpenCode config")
   log("  uninstall   Remove the plugin from OpenCode config")
+  log("  update      Update to the latest version")
   log("  status      Check installation status")
   log("  help        Show this help message\n")
   
@@ -275,6 +276,74 @@ function status() {
   console.log("")
 }
 
+async function update() {
+  log("\n" + "=".repeat(50), "bold")
+  log("OpenCode RTK Plugin - Update", "cyan")
+  log("=".repeat(50) + "\n", "bold")
+
+  const config = readOpenCodeConfig()
+  
+  if (!isPluginConfigured(config)) {
+    log("ℹ Plugin is not installed", "yellow")
+    log("\nRun `npx @rezamonangg/opencode-rtk install` first.\n")
+    process.exit(1)
+  }
+
+  log("Checking for updates...\n", "bold")
+
+  try {
+    // Get latest version from npm
+    const latestVersion = execSync(
+      "npm view @rezamonangg/opencode-rtk version",
+      { encoding: "utf-8" }
+    ).trim()
+
+    // Get current version from package
+    const packageJson = JSON.parse(
+      execSync(
+        "npm list -g @rezamonangg/opencode-rtk --json",
+        { encoding: "utf-8" }
+      )
+    )
+    const currentVersion = packageJson.dependencies?.["@rezamonangg/opencode-rtk"]?.version || "unknown"
+
+    if (currentVersion === latestVersion) {
+      log(`✓ Already up to date (v${currentVersion})`, "green")
+    } else {
+      log(`Current version: v${currentVersion}`, "yellow")
+      log(`Latest version: v${latestVersion}\n`, "green")
+      
+      console.log("")
+      const shouldUpdate = await askQuestion(
+        "Update to the latest version?"
+      )
+      
+      if (shouldUpdate) {
+        log("\nUpdating...", "cyan")
+        try {
+          execSync("npm install -g @rezamonangg/opencode-rtk@latest", {
+            stdio: "inherit"
+          })
+          log("\n✓ Update complete!", "green")
+          log("Restart OpenCode to use the new version.\n")
+        } catch {
+          log("\n✗ Update failed. Try running manually:", "red")
+          log("  npm install -g @rezamonangg/opencode-rtk@latest\n")
+          process.exit(1)
+        }
+      } else {
+        log("\nUpdate cancelled.", "yellow")
+      }
+    }
+  } catch {
+    log("✗ Could not check for updates", "red")
+    log("\nTry updating manually:")
+    log("  npm install -g @rezamonangg/opencode-rtk@latest\n")
+  }
+  
+  console.log("")
+}
+
 async function main() {
   const args = process.argv.slice(2)
   const command = args[0]
@@ -285,6 +354,9 @@ async function main() {
       break
     case "uninstall":
       await uninstall()
+      break
+    case "update":
+      await update()
       break
     case "status":
       status()
