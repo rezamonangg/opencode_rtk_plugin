@@ -58,7 +58,7 @@ flowchart TD
     F -- Yes --> Z
     F -- No --> G{simple command?\nno pipes / chains\n/ heredocs}
     G -- No --> Z
-    G -- Yes --> H{matches a pattern\nin commands[]?}
+    G -- Yes --> H{matches a pattern\nin the commands list?}
     H -- No --> Z
     H -- Yes --> I[Apply rewrite\nvia rewriteMap\nor prefix 'rtk ']
 
