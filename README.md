@@ -159,7 +159,6 @@ The plugin auto-generates `~/.config/opencode/rtk-wrapper-config.json` on first 
   ],
   "rewriteMap": {
     "cat": "rtk read",
-    "rg": "rtk grep",
     "eslint": "rtk lint"
   }
 }
@@ -237,7 +236,9 @@ Commands are automatically rewritten when they match your config:
 
 | Original | Becomes | Savings |
 |----------|---------|---------|
-| `rg` / `grep` | `rtk grep` | 50-80% |
+| `rg` / `grep` | Not rewritten* | — |
+
+> \* `rg`/`grep` are not auto-rewritten due to CLI argument ordering incompatibility with `rtk grep`. Use `rtk grep <pattern> <path> <flags>` directly if needed.
 
 ### Package Managers & Utils
 

@@ -29,7 +29,6 @@
   ],
   "rewriteMap": {
     "cat": "rtk read",
-    "rg": "rtk grep",
     "eslint": "rtk lint"
   }
 }

@@ -97,7 +97,6 @@ const DEFAULT_CONFIG: RtkConfig = {
   ],
   rewriteMap: {
     cat: "rtk read",
-    rg: "rtk grep",
     eslint: "rtk lint",
   },
 }
