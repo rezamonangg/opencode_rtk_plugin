@@ -67,8 +67,8 @@ OpenCode plugins are JavaScript/TypeScript modules placed in one of:
 
 | Location | Scope |
 |---|---|
-| `~/.config/opencode/plugins/` | Global (all projects) |
-| `.opencode/plugins/` | Project-level |
+| `~/.config/opencode/plugin/` | Global (all projects) |
+| `.opencode/plugin/` | Project-level |
 
 Plugins are auto-loaded at startup. No config changes needed for local plugins.
 
@@ -205,7 +205,7 @@ LLM receives compressed output (60-90% fewer tokens)
 
 ```
 ~/.config/opencode/
-├── plugins/
+├── plugin/
 │   └── rtk-plugin.ts          # Plugin code (hook logic)
 ├── rtk-wrapper-config.json    # User-editable config
 ├── opencode.json              # Existing config (no changes needed)
@@ -223,7 +223,7 @@ LLM receives compressed output (60-90% fewer tokens)
 
 | File | Purpose | Location |
 |---|---|---|
-| `rtk-plugin.ts` | Plugin source code | `~/.config/opencode/plugins/rtk-plugin.ts` |
+| `rtk-plugin.ts` | Plugin source code | `~/.config/opencode/plugin/rtk-plugin.ts` |
 | `rtk-wrapper-config.json` | Command configuration | `~/.config/opencode/rtk-wrapper-config.json` |
 
 ### Files NOT Modified
@@ -362,7 +362,7 @@ This prevents partial word matches (e.g., `"ls"` won't match `"lsof"`).
 
 ## 6. Plugin Implementation
 
-### File: `~/.config/opencode/plugins/rtk-plugin.ts`
+### File: `~/.config/opencode/plugin/rtk-plugin.ts`
 
 ```typescript
 import type { Plugin } from "@opencode-ai/plugin"

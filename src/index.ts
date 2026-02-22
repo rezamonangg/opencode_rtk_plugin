@@ -208,7 +208,7 @@ export const RTKPlugin: Plugin = async ({ client }) => {
   }
 
   // Auto-create the /rtk-gain slash command file if absent.
-  const commandsDir = join(configDir, "commands")
+  const commandsDir = join(configDir, "command")
   const commandPath = join(commandsDir, "rtk-gain.md")
   if (!existsSync(commandPath)) {
     try {

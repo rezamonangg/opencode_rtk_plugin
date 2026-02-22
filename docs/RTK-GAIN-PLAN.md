@@ -41,8 +41,8 @@ Slash commands are **prompt templates** stored as markdown files in:
 
 | Location | Scope |
 |---|---|
-| `~/.config/opencode/commands/` | Global |
-| `.opencode/commands/` | Project-level |
+| `~/.config/opencode/command/` | Global |
+| `.opencode/command/` | Project-level |
 
 The markdown filename becomes the command name. Running `/rtk-gain` sends
 the file's body to the LLM as a prompt.
@@ -268,7 +268,7 @@ loading config), create the slash command markdown file if it doesn't
 exist:
 
 ```typescript
-const commandsDir = join(configDir, "commands")
+const commandsDir = join(configDir, "command")
 const commandPath = join(commandsDir, "rtk-gain.md")
 
 if (!existsSync(commandPath)) {
@@ -348,7 +348,7 @@ Add a new section after "Debugging" documenting:
 
 ## 7. New Files
 
-### File: `~/.config/opencode/commands/rtk-gain.md` (auto-created at runtime)
+### File: `~/.config/opencode/command/rtk-gain.md` (auto-created at runtime)
 
 ```markdown
 ---
@@ -372,7 +372,7 @@ plugin on first load if it doesn't already exist.
 | TC-02 | `/rtk-gain` after 3 `git status` rewrites | Shows `git status — 3 rewrites` |
 | TC-03 | `/rtk-gain` after mixed commands (`git status` x2, `ls` x1, `cat` x3) | Shows all 3 commands sorted by count descending |
 | TC-04 | `rtk_gain` tool called directly by LLM (without slash command) | Works — returns same formatted stats |
-| TC-05 | Plugin loads, `~/.config/opencode/commands/rtk-gain.md` doesn't exist | File is auto-created |
+| TC-05 | Plugin loads, `~/.config/opencode/command/rtk-gain.md` doesn't exist | File is auto-created |
 | TC-06 | Plugin loads, `rtk-gain.md` already exists (user customized it) | File is NOT overwritten |
 | TC-07 | Plugin disabled (`enabled: false`) | `/rtk-gain` command file is NOT created, `rtk_gain` tool is NOT registered |
 | TC-08 | Restart OpenCode, run `/rtk-gain` | Stats reset to 0 (session-scoped) |
@@ -430,7 +430,7 @@ command → tool bridge pattern.
 
 ### Command File Conflicts
 
-If the user already has a `~/.config/opencode/commands/rtk-gain.md` for
+If the user already has a `~/.config/opencode/command/rtk-gain.md` for
 a different purpose, the plugin will not overwrite it (existence check
 prevents this). But the file would need to reference `rtk_gain` for
 the feature to work.
