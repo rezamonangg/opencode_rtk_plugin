@@ -8,21 +8,40 @@ import { execSync } from "child_process"
 // Session Stats (module-scope — resets on plugin reload)
 // ============================================================
 
+interface CommandStats {
+  count: number
+  tokensSaved: number
+}
+
 interface SessionStats {
-  rewriteCount: number
-  commands: Record<string, number>
+  commands: Record<string, CommandStats>
   startedAt: Date
 }
 
 const sessionStats: SessionStats = {
-  rewriteCount: 0,
   commands: {},
   startedAt: new Date(),
 }
 
+let pendingCommand: { cmdKey: string; baseline: number } | null = null
+
 // ============================================================
 // Stats Formatting
 // ============================================================
+
+function parseRtkGainTokens(output: string): number {
+  const match = output.match(/(\d+\.?\d*)K?\s*tokens saved/i)
+  if (!match) return 0
+  const value = parseFloat(match[1])
+  return output.includes(match[1] + "K") ? Math.round(value * 1000) : Math.round(value)
+}
+
+function formatTokens(n: number): string {
+  if (n >= 1000) {
+    return `${(n / 1000).toFixed(1)}K tokens`
+  }
+  return `${n} tokens`
+}
 
 function formatSessionStats(stats: SessionStats): string {
   const elapsed = Date.now() - stats.startedAt.getTime()
@@ -30,30 +49,31 @@ function formatSessionStats(stats: SessionStats): string {
   const hours = Math.floor(minutes / 60)
   const duration = hours > 0 ? `${hours}h ${minutes % 60}m` : `${minutes}m`
 
-  // Try to get actual token savings from RTK
-  try {
-    const rtkGain = execSync("rtk gain", { encoding: "utf-8", timeout: 5000 })
-    return `RTK Token Savings (${duration})\n\n${rtkGain}`
-  } catch {
-    // Fallback to basic stats if rtk gain fails
-    if (stats.rewriteCount === 0) {
-      return `RTK Session Stats (${duration})\nNo commands rewritten yet.`
-    }
-
-    const sorted = Object.entries(stats.commands).sort(([, a], [, b]) => b - a)
-    const maxCmdLen = Math.max(...sorted.map(([cmd]) => cmd.length))
-    const lines = sorted.map(
-      ([cmd, count]) =>
-        `  ${cmd.padEnd(maxCmdLen)}  — ${count} rewrite${count !== 1 ? "s" : ""}`
-    )
-
-    return [
-      `RTK Session Stats (${duration})`,
-      `Total rewrites: ${stats.rewriteCount}`,
-      "",
-      ...lines,
-    ].join("\n")
+  const entries = Object.entries(stats.commands)
+  if (entries.length === 0) {
+    return `📊 RTK Session Stats (${duration})\nNo commands rewritten yet.`
   }
+
+  const sorted = entries.sort(([, a], [, b]) => b.tokensSaved - a.tokensSaved)
+  const maxCmdLen = Math.max(...sorted.map(([cmd]) => cmd.length))
+
+  const lines = sorted.map(([cmd, data]) => {
+    const tokens = formatTokens(data.tokensSaved)
+    return `  ${cmd.padEnd(maxCmdLen)}  — ${data.count} call${data.count !== 1 ? "s" : ""}, ~${tokens} saved`
+  })
+
+  const totalCalls = sorted.reduce((sum, [, d]) => sum + d.count, 0)
+  const totalTokens = sorted.reduce((sum, [, d]) => sum + d.tokensSaved, 0)
+
+  return [
+    `📊 RTK Session Stats (${duration})`,
+    "⚠️ Token savings are estimated per-session. If running multiple OpenCode instances simultaneously, totals may include savings from other sessions.",
+    "",
+    "Commands Rewritten:",
+    ...lines,
+    "",
+    `Total: ${totalCalls} command${totalCalls !== 1 ? "s" : ""}, ~${formatTokens(totalTokens)} saved`,
+  ].join("\n")
 }
 
 // ============================================================
@@ -261,14 +281,28 @@ export const RTKPlugin: Plugin = async ({ client }) => {
       if (!isSimpleCommand(trimmed)) return
       if (!shouldWrap(trimmed, config.commands)) return
 
+      const words = trimmed.split(/\s+/)
+      const cmdKey = words.length >= 2 ? `${words[0]} ${words[1]}` : words[0]
+
+      // Get baseline before execution
+      let baseline = 0
+      try {
+        const rtkGain = execSync("rtk gain", { encoding: "utf-8", timeout: 5000 })
+        baseline = parseRtkGainTokens(rtkGain)
+      } catch {
+        // rtk not installed or failed - baseline stays 0
+      }
+      pendingCommand = { cmdKey, baseline }
+
+      // Rewrite command
       const rewritten = rewriteCommand(trimmed, config.rewriteMap)
       output.args.command = rewritten
 
-      // Track the rewrite for /rtk-gain stats.
-      sessionStats.rewriteCount++
-      const words = trimmed.split(/\s+/)
-      const cmdKey = words.length >= 2 ? `${words[0]} ${words[1]}` : words[0]
-      sessionStats.commands[cmdKey] = (sessionStats.commands[cmdKey] ?? 0) + 1
+      // Track count
+      if (!sessionStats.commands[cmdKey]) {
+        sessionStats.commands[cmdKey] = { count: 0, tokensSaved: 0 }
+      }
+      sessionStats.commands[cmdKey].count++
 
       await client.app.log({
         body: {
@@ -277,6 +311,23 @@ export const RTKPlugin: Plugin = async ({ client }) => {
           message: `RTK rewrite: "${trimmed}" -> "${rewritten}"`,
         },
       })
+    },
+    "tool.execute.after": async () => {
+      if (!pendingCommand) return
+
+      try {
+        const rtkGain = execSync("rtk gain", { encoding: "utf-8", timeout: 5000 })
+        const current = parseRtkGainTokens(rtkGain)
+        const delta = current - pendingCommand.baseline
+
+        if (delta > 0 && sessionStats.commands[pendingCommand.cmdKey]) {
+          sessionStats.commands[pendingCommand.cmdKey].tokensSaved += delta
+        }
+      } catch {
+        // rtk not installed or failed - tokensSaved stays 0
+      }
+
+      pendingCommand = null
     },
   }
 }
